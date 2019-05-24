@@ -19,7 +19,6 @@ class NotesListViewController: UITableViewController, CreateNewNoteDelegate {
     var filteredNotes = [Note]()
     @IBOutlet weak var sortButton: UIBarButtonItem!
     
-    
     override func viewDidLoad() {
         super.viewDidLoad()
         setupSearchController()
@@ -33,7 +32,7 @@ class NotesListViewController: UITableViewController, CreateNewNoteDelegate {
     }
 
     
-    //MARK:- TableView Datasource Methods
+    //MARK: - TableView Datasource Methods
     
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         if isFiltering() {
@@ -51,39 +50,29 @@ class NotesListViewController: UITableViewController, CreateNewNoteDelegate {
         return notes?.count ?? 1
     }
     
-
-    
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "NoteCustomCell", for: indexPath) as! NoteCustomCell
         
-        
-        
-        if isFiltering() {
-            cell.noteTextLabel.text = filteredNotes[indexPath.row].noteText.maxLength(length: 100)
+        func cellDateSetup(date: Date?) {
             let dateFormatterForDateLabel = DateFormatter()
             let dateFormatterForTimeLabel = DateFormatter()
             dateFormatterForDateLabel.dateFormat = "dd.MM.yyyy"
             dateFormatterForTimeLabel.dateFormat = "HH:mm"
-            if let date = filteredNotes[indexPath.row].noteDate {
-                let dateString = dateFormatterForDateLabel.string(from: date)
-                let timeString = dateFormatterForTimeLabel.string(from: date)
+            if let noteDate = date {
+                let dateString = dateFormatterForDateLabel.string(from: noteDate)
+                let timeString = dateFormatterForTimeLabel.string(from: noteDate)
                 cell.dateLabel.text = dateString
                 cell.timeLabel.text = timeString
             }
+        }
+        
+        if isFiltering() {
+            cell.noteTextLabel.text = filteredNotes[indexPath.row].noteText.maxLength(length: 100)
+            cellDateSetup(date: filteredNotes[indexPath.row].noteDate)
         } else {
             if let note = notes?[indexPath.row] {
             cell.noteTextLabel.text = note.noteText.maxLength(length: 100)
-        
-            let dateFormatterForDateLabel = DateFormatter()
-            let dateFormatterForTimeLabel = DateFormatter()
-            dateFormatterForDateLabel.dateFormat = "dd.MM.yyyy"
-            dateFormatterForTimeLabel.dateFormat = "HH:mm"
-            if let date = note.noteDate {
-                let dateString = dateFormatterForDateLabel.string(from: date)
-                let timeString = dateFormatterForTimeLabel.string(from: date)
-                cell.dateLabel.text = dateString
-                cell.timeLabel.text = timeString
-                }
+            cellDateSetup(date: note.noteDate)
             }
         }
         
@@ -91,11 +80,39 @@ class NotesListViewController: UITableViewController, CreateNewNoteDelegate {
     }
     
     
-    //MARK:- TableView Delegate Methods
+    //MARK: - TableView Delegate Methods
     
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         performSegue(withIdentifier: "goToDetails", sender: self)
     }
+    
+    override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
+        let destinationVC = segue.destination as! DetailsViewController
+        destinationVC.delegate = self
+        if segue.identifier == "goToDetails" {
+            if let indexPath = tableView.indexPathForSelectedRow {
+                if isFiltering() {
+                    destinationVC.selectedNote = filteredNotes[indexPath.row]
+                } else {
+                    destinationVC.selectedNote = notes?[indexPath.row]
+                }
+            }
+            if let noteToEdit = editingNoteRow {
+                if isFiltering() {
+                    if filteredNotes[noteToEdit].canEdit {
+                        destinationVC.selectedNote = filteredNotes[noteToEdit]
+                    }
+                } else {
+                    if let editable = notes?[noteToEdit].canEdit {
+                        if editable {
+                            destinationVC.selectedNote = notes?[noteToEdit]
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
     
     //MARK: - SwipeActions
     
@@ -107,11 +124,12 @@ class NotesListViewController: UITableViewController, CreateNewNoteDelegate {
     
     func deleteAction(at indexPath: IndexPath) -> UIContextualAction {
         let action = UIContextualAction(style: .destructive, title: "Delete") { (action, view, completion) in
+            
             if self.isFiltering() {
-                let noteToDelete = self.filteredNotes[indexPath.row]
+                let note = self.filteredNotes[indexPath.row]
                 do {
                     try self.realm.write {
-                        self.realm.delete(noteToDelete)
+                        self.realm.delete(note)
                         self.filteredNotes.remove(at: indexPath.row)
                         self.tableView.reloadData()
                     }
@@ -178,7 +196,7 @@ class NotesListViewController: UITableViewController, CreateNewNoteDelegate {
         tableView.reloadData()
         
     }
-    
+    //loading in saved order
     func loadNotes() {
         switch defaults.string(forKey: "Sorting") {
         case "fromNew":
@@ -195,36 +213,10 @@ class NotesListViewController: UITableViewController, CreateNewNoteDelegate {
         tableView.reloadData()
     }
     
-    
-    //MARK:- Add new note
+    //MARK: - Add new note
     
     @IBAction func addNoteButton(_ sender: UIBarButtonItem) {
-        performSegue(withIdentifier: "goToDetails", sender: self)
-    }
-    
-    override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
-        let destinationVC = segue.destination as! DetailsViewController
-        destinationVC.delegate = self
-        if let indexPath = tableView.indexPathForSelectedRow {
-            if isFiltering() {
-                destinationVC.selectedNote = filteredNotes[indexPath.row]
-            } else {
-                destinationVC.selectedNote = notes?[indexPath.row]
-            }
-        }
-        if let noteToEdit = editingNoteRow {
-            if isFiltering() {
-                if filteredNotes[noteToEdit].canEdit {
-                    destinationVC.selectedNote = filteredNotes[noteToEdit]
-                }
-            } else {
-                if let editable = notes?[noteToEdit].canEdit {
-                    if editable {
-                        destinationVC.selectedNote = notes?[noteToEdit]
-                    }
-                }
-            }
-        }
+        performSegue(withIdentifier: "goToNew", sender: self)
     }
     
     func addNewNote(note: String) {
@@ -234,6 +226,8 @@ class NotesListViewController: UITableViewController, CreateNewNoteDelegate {
         self.save(note: newNote)
         tableView.reloadData()
     }
+    
+    //MARK: - Searchcontroller setup
     
     func setupSearchController() {
         searchController.searchResultsUpdater = self
@@ -245,15 +239,15 @@ class NotesListViewController: UITableViewController, CreateNewNoteDelegate {
     }
     
     func searchBarIsEmpty() -> Bool {
-        // Returns true if the text is empty or nil
         return searchController.searchBar.text?.isEmpty ?? true
     }
     
     func filterContentForSearchText(_ searchText: String, scope: String = "All") {
-        filteredNotes = (notes?.filter({( note : Note) -> Bool in
-            return note.noteText.lowercased().contains(searchText.lowercased())
-        }))!
-        
+        if let allNotes = notes {
+            filteredNotes = allNotes.filter({( note : Note) -> Bool in
+                return note.noteText.lowercased().contains(searchText.lowercased())
+            })
+        }
         tableView.reloadData()
     }
     
@@ -261,11 +255,12 @@ class NotesListViewController: UITableViewController, CreateNewNoteDelegate {
         return searchController.isActive && !searchBarIsEmpty()
     }
     
+    //MARK: - Sorting setup
+    
     @IBAction func sortButtonPressed(_ sender: UIBarButtonItem) {
         let alert = UIAlertController(title: "Сортировка заметок", message: "Вы можете отсортировать заметки по дате или имени", preferredStyle: .actionSheet)
         
         let action1 = UIAlertAction(title: "По дате", style: .default) { (action) in
-        
             let dateSortAlert = UIAlertController(title: "Сортировка по дате", message: nil, preferredStyle: .actionSheet)
             let fromNew = UIAlertAction(title: "От новых к старым", style: .default, handler: { (action) in
                 do {
@@ -277,14 +272,12 @@ class NotesListViewController: UITableViewController, CreateNewNoteDelegate {
                     print("Error sorting notes, \(error)")
                 }
                 self.tableView.reloadData()
-
             })
             let fromOld = UIAlertAction(title: "От старых к новым", style: .default, handler: { (action) in
                 do {
                     try self.realm.write {
                         self.notes = self.realm.objects(Note.self).sorted(byKeyPath: "noteDate", ascending: true)
                         self.defaults.set("fromOld", forKey: "Sorting")
-
                     }
                 } catch {
                     print("Error sorting notes, \(error)")
@@ -293,9 +286,12 @@ class NotesListViewController: UITableViewController, CreateNewNoteDelegate {
             })
             dateSortAlert.addAction(fromNew)
             dateSortAlert.addAction(fromOld)
-            self.present(dateSortAlert, animated: true, completion: nil)
-            
+            self.present(dateSortAlert, animated: true) {
+                //closing actionsheet when user touch outside
+                self.tapRecognizer(alert: dateSortAlert)
+            }
         }
+        
         let action2 = UIAlertAction(title: "По имени", style: .default) { (action) in
             let nameSortAlert = UIAlertController(title: "Сортировка по имени", message: nil, preferredStyle: .actionSheet)
             let fromAtoZ = UIAlertAction(title: "А-Я", style: .default, handler: { (action) in
@@ -303,7 +299,6 @@ class NotesListViewController: UITableViewController, CreateNewNoteDelegate {
                     try self.realm.write {
                         self.notes = self.realm.objects(Note.self).sorted(byKeyPath: "noteText", ascending: true)
                         self.defaults.set("fromAtoZ", forKey: "Sorting")
-                        //self.notes = self.notes?.sorted(byKeyPath: "noteText", ascending: true)
                     }
                 } catch {
                     print("Error sorting notes, \(error)")
@@ -323,22 +318,29 @@ class NotesListViewController: UITableViewController, CreateNewNoteDelegate {
             })
             nameSortAlert.addAction(fromAtoZ)
             nameSortAlert.addAction(fromZtoA)
-            self.present(nameSortAlert, animated: true, completion: nil)
+            self.present(nameSortAlert, animated: true) {
+                self.tapRecognizer(alert: nameSortAlert)
+            }
             
         }
-        
-        
         alert.addAction(action1)
         alert.addAction(action2)
-        present(alert, animated: true, completion: nil)
+        present(alert, animated: true) {
+            self.tapRecognizer(alert: alert)
+        }
     }
     
+    func tapRecognizer(alert: UIAlertController) {
+        alert.view.superview?.subviews.first?.isUserInteractionEnabled = true
+        alert.view.superview?.subviews.first?.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.actionSheetBackgroundTapped)))
+    }
     
-    
-    
-
-
+    @objc func actionSheetBackgroundTapped() {
+        self.dismiss(animated: true, completion: nil)
+    }
 }
+
+//MARK: - Extensions
 
 extension String {
     func maxLength(length: Int) -> String {
@@ -356,7 +358,6 @@ extension String {
 }
 
 extension NotesListViewController: UISearchResultsUpdating {
-    // MARK: - UISearchResultsUpdating Delegate
     func updateSearchResults(for searchController: UISearchController) {
         if let text = searchController.searchBar.text {
             filterContentForSearchText(text)
@@ -387,7 +388,6 @@ extension UITableView {
         messageLabel.text = message
         messageLabel.numberOfLines = 0
         messageLabel.textAlignment = .center
-        // The only tricky part is here:
         self.backgroundView = emptyView
         self.separatorStyle = .none
     }
